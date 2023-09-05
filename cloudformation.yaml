@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Deploy East AI Workshop Environment.
+Parameters:
+  AppServerVPC:
+    Description: Select a VPC for deployment.
+    Type: AWS::EC2::VPC::Id
+  AppServerSubnet:
+    Description: Select a subnet for deployment.
+    Type: AWS::EC2::Subnet::Id    
+Mappings:
+  AWSRegionArch2AMI:
+    us-east-1:
+      HVM64: ami-051f7e7f6c2f40dc1
+    us-east-2:
+      HVM64: ami-0cf0e376c672104d6
+    us-west-2:
+      HVM64: ami-002829755fa238bfa
+    ap-northeast-1:
+      HVM64: ami-0310b105770df9334
+    ap-southeast-1:
+      HVM64: ami-0464f90f5928bccb8
+
+Resources:
+  AppServerRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      ManagedPolicyArns: 
+        - "arn:aws:iam::aws:policy/AdministratorAccess"
+  
+  AppServerInstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - Ref: "AppServerRole"
+
+  AppServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable access to Workshop App Server
+      VpcId: !Ref AppServerVPC
+      SecurityGroupIngress:
+        - IpProtocol: "tcp"
+          CidrIp: "0.0.0.0/0"
+          FromPort: "80"
+          ToPort: "80"
+          Description: Allow HTTP Traffic
+        - IpProtocol: "tcp"
+          FromPort: "22"
+          ToPort: "22"
+          CidrIp: "0.0.0.0/0"
+          Description: Allow SSH Traffic
+
+
+  AppServerENI:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: ENI
+      SubnetId: !Ref AppServerSubnet
+      GroupSet:
+        - !Ref AppServerSecurityGroup
+
+  AppServer:
+    DependsOn:
+      - AppServerRole
+    Type: "AWS::EC2::Instance"
+    Properties:
+      InstanceType: "t3.large"
+      ImageId: !FindInMap [ AWSRegionArch2AMI, !Ref 'AWS::Region', HVM64]
+      IamInstanceProfile: !Ref AppServerInstanceProfile
+      NetworkInterfaces:
+        - NetworkInterfaceId: !Ref AppServerENI
+          DeviceIndex: 0
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: 50
+      Tags:
+        - Key: Name
+          Value: GenAI Workshop Server
+      UserData:
+        Fn::Base64: !Sub
+          - |
+            #!/bin/bash
+            echo "hello"
+          - parameter: GenAI
+
+Outputs:
+  AppServerIPAddress:
+    Description: Public IP of App Server
+    Value: !GetAtt AppServer.PublicIp
