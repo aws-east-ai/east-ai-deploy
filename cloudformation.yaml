@@ -78,8 +78,12 @@ Resources:
       ImageId: !FindInMap [ AWSRegionArch2AMI, !Ref 'AWS::Region', HVM64]
       IamInstanceProfile: !Ref AppServerInstanceProfile
       NetworkInterfaces:
-        - NetworkInterfaceId: !Ref AppServerENI
+        - AssociatePublicIpAddress: true
+          Description: ENI
           DeviceIndex: 0
+          SubnetId: !Ref AppServerSubnet
+          GroupSet:
+            - !Ref AppServerSecurityGroup
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
