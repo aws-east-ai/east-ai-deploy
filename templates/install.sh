@@ -21,3 +21,6 @@ export WORKSHOP_IMAGE_BUCKET=east-ai-workshop-$ACCOUNTID
 pip3 install -r requirements.txt
 pip3 install gunicorn
 gunicorn -k uvicorn.workers.UvicornWorker app:app -w 5 --log-level error --log-file error.log &
+cd ../../templates/
+chmod +x postinstall.sh
+./postinstall.sh
