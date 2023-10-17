@@ -117,6 +117,9 @@ Resources:
             pip3 install -r requirements.txt
             pip3 install gunicorn
             gunicorn -k uvicorn.workers.UvicornWorker app:app -w 5 --log-file error.log --access-logfile access.log &
+            cd ../../templates/
+            chmod +x postinstall.sh
+            ./postinstall.sh
           - parameter: GenAI
 
 Outputs:
