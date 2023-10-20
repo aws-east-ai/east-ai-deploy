@@ -119,7 +119,7 @@ Resources:
             gunicorn -k uvicorn.workers.UvicornWorker app:app -w 5 --log-file error.log --access-logfile access.log &
             cd ../../templates/
             chmod +x postinstall.sh
-            ./postinstall.sh
+            ./postinstall.sh $ACCOUNTID
           - parameter: GenAI
 
 Outputs:
