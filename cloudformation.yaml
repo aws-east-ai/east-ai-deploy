@@ -127,7 +127,6 @@ Resources:
             export KNOWLEDGE_BASE_ID=${kb_id}
             export GOOGLE_CSE_CX=${cse_id}
             export GOOGLE_API_KEY=${goog_key}
-            echo ${kb_id} > test.txt
             pip3 install -r requirements.txt
             pip3 install gunicorn
             gunicorn -k uvicorn.workers.UvicornWorker app:app -w 5 --log-file error.log --access-logfile access.log &
