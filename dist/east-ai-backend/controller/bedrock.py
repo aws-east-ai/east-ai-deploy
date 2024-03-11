@@ -9,6 +9,7 @@ import random
 from googleapiclient.discovery import build
 import requests
 from bs4 import BeautifulSoup
+from utils.kb import claude3_summuary_kb, claude2_summuary_kb
 
 
 class Bedrock:
@@ -131,89 +132,45 @@ class Bedrock:
 
         results = response["retrievalResults"]
         texts = []
+        urls = []
         refs = {}
         for result in results:
             texts.append(result["content"]["text"])
             s3_url = result["location"]["s3Location"]["uri"]
+            urls.append(s3_url)
             if s3_url in refs:
                 refs[s3_url] = refs[s3_url] + 1
             else:
                 refs[s3_url] = 1
-        return texts, sorted(refs.items(), key=lambda x: x[1], reverse=True)
+        # return texts, sorted(refs.items(), key=lambda x: x[1], reverse=True)
+        return texts, urls
 
     async def kb_summary_content(self, text: str, history):
         se_title, se_link, se_content = self.google_top_article(text)
         result = self.kb_retrieve(text)
-        knowledges = "\n\n".join(result[0])
+        search_result = result[0]
+        if se_content:
+            search_result.append(se_content)
 
-        # temp_prompt = ""
-        # if history:
-        #     for [q, a] in history:
-        #         a = a.replace("<br />", "\n")
-        #         a = a[0 : a.rindex("<div class='citations'>")]
-        #         temp_prompt = temp_prompt + "Human:{q}\n\nAssistant:{a}\n\n".format(
-        #             q=q, a=a
-        #         )
-        # prompt = f"""Human:<history>{temp_prompt}</history>
-        # if 'history' is not empty, please focus on the questioner’s intention and whether it is related to 'history'.
+        # strmSummary = claude2_summuary_kb(self.bedrock, text, search_result)
+        strmSummary = claude3_summuary_kb(self.bedrock, text, search_result)
 
-        prompt = f"""Human:
+        while True:
+            try:
+                yield next(strmSummary)
+            except StopIteration:
+                break
 
-Please answer the question posed in the 'question' tag based on the information below.
-Among them, the 'history' tag is the conversation history, 
-the 'knowledge_base' tag is the knowledge try to answer current question, 
-and the knowledge in 'search_engine' comes from the internent.
-Please focus on the knowledge of 'knowledge_base', refer to the content of 'search_engine', 
-
-<question>{text}</question>
-
-
-<knowledge_base>{knowledges}</knowledge_base>
-
-<search_engine>
-{se_title}
-{se_content}
-</search_engine>
-
-Assistant:
-        """
-
-        # print(prompt)
-
-        modelId = "anthropic.claude-v2"
-        accept = "*/*"
-        contentType = "application/json"
-        body = json.dumps(
-            {
-                "prompt": prompt,
-                "max_tokens_to_sample": 2048,
-                "temperature": 1,
-                "top_p": 0.999,
-                "stop_sequences": ["\n\nHuman:"],
-            }
-        )
-        response = self.bedrock.invoke_model_with_response_stream(
-            body=body,
-            modelId=modelId,
-            accept=accept,
-            contentType=contentType,
-        )
-        stream = response.get("body")
-        if stream:
-            for event in stream:
-                chunk = event.get("chunk")
-                if chunk:
-                    chunk_obj = json.loads(chunk.get("bytes").decode())
-                    text = chunk_obj["completion"]
-                    yield text
         yield "<div class='citations'>Citations: "
-        for s3_loc in result[1]:
+        if se_link:
+            yield f"<span>0</span> <a href='{se_link}' target='_blank'>{se_title[0:15]}...{se_title[-15:]}</a><br />"
+        refs = result[1]
+        for i in range(len(refs)):
             # s3_full_loc = s3_loc[0][5:]
             # yield "<a>" + s3_full_loc[s3_full_loc.index("/") + 1 :] + "</a>"
-            yield f"<a>{s3_loc[0]}</a>"
+            yield f"<span>{i+1}</span> <a>{refs[i][0:10]}...{refs[i][-20:]}</a><br />"
             yield "\n"
-        if se_link:
-            yield f"<a href='{se_link}' target='_blank'>{se_title}</a>\n"
+
         yield "</div>"
 
     async def kb_rag_handler(self, item: dict):
