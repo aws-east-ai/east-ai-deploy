@@ -2,6 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import json
 import boto3
 import os
+from utils.bot import claude2_bot, claude3_bot
 
 
 ws_router = APIRouter()
@@ -52,7 +53,11 @@ async def chat_bot(websocket: WebSocket):
             if model_id == "chatglm2":
                 await ask_chatglm2(websocket, prompt, history)
             elif model_id == "bedrock_claude2":
-                await ask_bedrock_claude2(websocket, prompt, history)
+                # await ask_bedrock_claude2(websocket, prompt, history)
+                await claude2_bot(bedrock, websocket, prompt, history)
+            elif model_id == "bedrock_claude3":
+                # await ask_bedrock_claude2(websocket, prompt, history)
+                await claude3_bot(bedrock, websocket, prompt, history)
     except WebSocketDisconnect:
         print(f"Client left")
 
@@ -85,47 +90,3 @@ async def ask_chatglm2(websocket: WebSocket, prompt: str, history):
 
     result_end = '{"status": "done"}'
     await websocket.send_text(result_end)
-
-
-async def ask_bedrock_claude2(websocket: WebSocket, prompt: str, history):
-    modelId = "anthropic.claude-v2"
-    accept = "*/*"
-    contentType = "application/json"
-    body = json.dumps(
-        {
-            "prompt": claude2_combine_history(history, prompt),
-            "max_tokens_to_sample": 2048,
-            "temperature": 0.5,
-            "top_p": 0.9,
-        }
-    )
-    response = bedrock.invoke_model_with_response_stream(
-        body=body,
-        modelId=modelId,
-        accept=accept,
-        contentType=contentType,
-    )
-    stream = response.get("body")
-    if stream:
-        for event in stream:
-            chunk = event.get("chunk")
-            if chunk:
-                chunk_obj = json.loads(chunk.get("bytes").decode())
-                # print(chunk_obj)
-                text = chunk_obj["completion"]
-                await websocket.send_text(text)
-
-        result_end = '{"status": "done"}'
-        await websocket.send_text(result_end)
-
-
-def claude2_combine_history(history, newQ):
-    if not history:
-        return "Human:{prompt} \\n\\nAssistant:".format(prompt=newQ)
-
-    prompt = ""
-    for [q, a] in history:
-        prompt = prompt + "Human:{q}\\n\\nAssistant:{a}\\n\\n".format(q=q, a=a)
-    prompt = prompt + "Human:{prompt} \\n\\nAssistant:".format(prompt=newQ)
-    # print(prompt)
-    return prompt
